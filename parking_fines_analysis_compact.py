@@ -23,7 +23,7 @@ import openpyxl
 
 # Section 9.1: only exclude respondents after reviewing their responses.
 # The paper's cross-domain low-variance exclusion rule is not reproducible here.
-EXCLUDE_IDS = {'G1': [], 'G2': []}  # Example: {'G1': [12], 'G2': []}
+EXCLUDE_IDS = {'G1': [], 'G2': []}  # Add ID's to lists if we want to exclude that response for any reason
 # Section 9.2: retain compactness item 3 in the main analysis, as in the paper.
 # Set True and rerun into a different output folder for the reported sensitivity check.
 DROP_COMPACTNESS_ITEM_3 = False
@@ -67,7 +67,7 @@ CONSTRUCTS = {'Fidelity': ['Completeness', 'Soundness', 'Causability'],
               'Interpretability': ['Clarity', 'Compactness', 'Comprehensibility']}
 LIKERT = dict(zip(['strongly disagree', 'disagree', 'somewhat disagree',
                   'neither agree or disagree', 'somewhat agree', 'agree', 'strongly agree'], range(1, 8)))
-LIKERT['neither agree nor disagree'] = 4
+#LIKERT['neither agree nor disagree'] = 4
 
 
 def normalize(text):
@@ -148,8 +148,8 @@ def main(group1, group2):
     loadings = []
     for dim in ITEMS:
         x = data[item_columns(dim)]
-        if (x.std() == 0).any():
-            raise ValueError(f'{dim}: constant item prevents component analysis.')
+        if (x.std() == 0).any(): #i.e. everyone gave the same answer
+            raise ValueError(f'{dim}: constant item prevents component analysis.') 
         eigenvalues, eigenvectors = np.linalg.eigh(x.corr())
         loading = eigenvectors[:, -1] * np.sqrt(eigenvalues[-1])
         if loading.sum() < 0:
