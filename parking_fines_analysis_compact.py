@@ -10,7 +10,7 @@ Text Likert answers are converted automatically. No configuration file needed.
 Replication assumptions:
 - Scores are equal-weight means; the paper gives no explicit scoring equation.
 - Table 7 extraction is unspecified: use one-component PCA, not claim exact EFA.
-- Construct alpha uses nine items; the paper does not specify this granularity.
+- Paper-comparable construct alpha uses the three dimension scores. Alpha across all nine raw items is reported only as a sensitivity analysis.
 - Parking group labels conflict between Table 5 and Section 8: retain G1/G2.
 - ANCOVA Table 10 tests the WHOLE model, not just the group effect.
 """
