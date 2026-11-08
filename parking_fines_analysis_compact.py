@@ -118,10 +118,37 @@ def main(group1, group2):
 
     #Section 9.2 / Table 6: raw alpha for eight dimensions and two constructs.
     reliability = []
+    # Reliability of each dimension based on its three questionnaire items.
     scales = {dim: item_columns(dim) for dim in ITEMS}
-    scales.update({c: [col for d in dims for col in item_columns(d)] for c, dims in CONSTRUCTS.items()})
+
     for scale, cols in scales.items():
-        reliability.append({'Scale': scale, 'Cronbach_alpha': cronbach_alpha(data[cols])})
+        reliability.append({
+            'Scale': scale,
+            'Method': 'three raw items',
+            'Cronbach_alpha': cronbach_alpha(data[cols])
+        })
+
+    # Construct reliability based on the three dimension scores.
+    # This reproduces the calculation used for Table 6 of the paper.
+    for construct, dimensions in CONSTRUCTS.items():
+        reliability.append({
+            'Scale': construct,
+            'Method': 'three dimension scores (paper-comparable)',
+            'Cronbach_alpha': cronbach_alpha(data[dimensions])
+        })
+
+        # Additional sensitivity calculation using all nine individual items.
+        nine_items = [
+            column
+            for dimension in dimensions
+            for column in item_columns(dimension)
+        ]
+
+        reliability.append({
+            'Scale': f'{construct}_nine_raw_items',
+            'Method': 'nine raw items (sensitivity)',
+            'Cronbach_alpha': cronbach_alpha(data[nine_items])
+        })
     reliability.append({'Scale': 'Compactness_without_item_3',
                         'Cronbach_alpha': cronbach_alpha(data[['Compactness_1', 'Compactness_2']])})
     pd.DataFrame(reliability).to_csv(OUTPUT / 'table6_reliability.csv', index=False)
