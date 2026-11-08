@@ -1,7 +1,18 @@
 """Parking-fines replication: Section 9 of Fahland et al. (2025).
 
-required packages: python -m pip install numpy pandas scipy openpyxl
+Install: python -m pip install numpy pandas scipy openpyxl
 Run:     python parking_fines_analysis_compact.py G1_responses.xlsx G2_responses.xlsx
+Results: CSV tables in parking_results/ (overwritten when rerun).
+
+Input: two independent groups, complete responses, same headers as your export.
+Text Likert answers are converted automatically. No configuration file needed.
+
+Replication assumptions:
+- Scores are equal-weight means; the paper gives no explicit scoring equation.
+- Table 7 extraction is unspecified: use one-component PCA, not claim exact EFA.
+- Construct alpha uses nine items; the paper does not specify this granularity.
+- Parking group labels conflict between Table 5 and Section 8: retain G1/G2.
+- ANCOVA Table 10 tests the WHOLE model, not just the group effect.
 """
 import sys
 from pathlib import Path
@@ -10,8 +21,9 @@ import pandas as pd
 from scipy import stats
 import openpyxl
 
+# Section 9.1: only exclude respondents after reviewing their responses.
+# The paper's cross-domain low-variance exclusion rule is not reproducible here.
 EXCLUDE_IDS = {'G1': [], 'G2': []}  # Add ID's to lists if we want to exclude that response for any reason
-
 # Section 9.2: retain compactness item 3 in the main analysis, as in the paper.
 # Set True and rerun into a different output folder for the reported sensitivity check.
 DROP_COMPACTNESS_ITEM_3 = False
@@ -55,6 +67,7 @@ CONSTRUCTS = {'Fidelity': ['Completeness', 'Soundness', 'Causability'],
               'Interpretability': ['Clarity', 'Compactness', 'Comprehensibility']}
 LIKERT = dict(zip(['strongly disagree', 'disagree', 'somewhat disagree',
                   'neither agree or disagree', 'somewhat agree', 'agree', 'strongly agree'], range(1, 8)))
+#LIKERT['neither agree nor disagree'] = 4
 
 
 def normalize(text):
@@ -62,6 +75,7 @@ def normalize(text):
 
 
 def read_survey(file, group):
+    # Ordinary openpyxl mode also handles the worksheet dimensions in your export.
     sheet = openpyxl.load_workbook(file, data_only=True).worksheets[0]
     rows = list(sheet.values)
     df = pd.DataFrame(rows[1:], columns=[normalize(h) for h in rows[0]])
@@ -71,7 +85,7 @@ def read_survey(file, group):
     scores = pd.DataFrame(index=df.index)
     for dimension, questions in ITEMS.items():
         for i, question in enumerate(questions, 1):
-            #Accept text labels and numbers 1–7. No items are reverse scored.
+            # Accept text labels and numbers 1–7. No items are reverse scored.
             values = df[normalize(question)]
             numeric = pd.to_numeric(values, errors='coerce')
             scores[f'{dimension}_{i}'] = values.map(normalize).map(LIKERT).fillna(numeric)
@@ -92,7 +106,7 @@ def cronbach_alpha(x):
 
 
 def fit_ols(y, x):
-    #Least squares residual variance and coefficient covariance for F tests/SEs.
+    # Least squares, residual variance and coefficient covariance for F tests/SEs.
     n, p = x.shape
     if n <= p or np.linalg.matrix_rank(x) < p:
         raise ValueError('Too few responses or collinear predictors for this model.')
@@ -116,7 +130,11 @@ def main(group1, group2):
     assert all((data.Group == g).sum() >= 2 for g in ['G1', 'G2']), 'Both groups need at least two responses.'
     OUTPUT.mkdir(parents=True, exist_ok=True)
 
-    #Section 9.2 / Table 6: raw alpha for eight dimensions and two constructs.
+    # Section 9.1: keep consenting responses unless IDs were explicitly excluded.
+    # Review unusual scores before changing EXCLUDE_IDS; the paper retained mild
+    # construct outliers. Its cross-domain low-variance rule is not specified.
+
+    # Section 9.2 / Table 6: raw alpha for eight dimensions and two constructs.
     reliability = []
     # Reliability of each dimension based on its three questionnaire items.
     scales = {dim: item_columns(dim) for dim in ITEMS}
@@ -153,7 +171,7 @@ def main(group1, group2):
                         'Cronbach_alpha': cronbach_alpha(data[['Compactness_1', 'Compactness_2']])})
     pd.DataFrame(reliability).to_csv(OUTPUT / 'table6_reliability.csv', index=False)
 
-    #Section 9.2 / Table 7: PCA loadings from each dimension's correlation matrix.
+    # Section 9.2 / Table 7: PCA loadings from each dimension's correlation matrix.
     loadings = []
     for dim in ITEMS:
         x = data[item_columns(dim)]
@@ -162,12 +180,12 @@ def main(group1, group2):
         eigenvalues, eigenvectors = np.linalg.eigh(x.corr())
         loading = eigenvectors[:, -1] * np.sqrt(eigenvalues[-1])
         if loading.sum() < 0:
-            loading *= -1
+            loading *= -1  # Component signs are arbitrary; orient positively.
         loadings.append({'Dimension': dim, **{f'Item_{i}': v for i, v in enumerate(loading, 1)},
                          'Variance_explained_percent': 100 * eigenvalues[-1] / x.shape[1]})
     pd.DataFrame(loadings).to_csv(OUTPUT / 'table7_component_loadings.csv', index=False)
 
-    #Section 9.3 / Table 8: mean, sample SD and n for the six quality dimensions.
+    # Section 9.3 / Table 8: mean, sample SD and n for the six quality dimensions.
     descriptives = []
     for group, subset in data.groupby('Group'):
         for construct, dims in CONSTRUCTS.items():
@@ -176,8 +194,9 @@ def main(group1, group2):
                                      'M': subset[dim].mean(), 'SD': subset[dim].std(), 'n': len(subset)})
     pd.DataFrame(descriptives).to_csv(OUTPUT / 'table8_descriptives.csv', index=False)
 
-    #Section 9.3.2 / Table 10: two ANOVAs and two ANCOVAs (trust + curiosity).
-    results, covariate_results = [], []
+    # Section 9.3.2 / Table 10: two ANOVAs and two ANCOVAs (trust + curiosity).
+    # Table 10's ANCOVA F and eta² refer to the WHOLE model. They are not a group test.
+    results, term_results = [], []
     group = (data.Group == 'G2').to_numpy(float)
     for outcome in CONSTRUCTS:
         for adjusted in [False, True]:
@@ -189,19 +208,32 @@ def main(group1, group2):
             row = {'Construct': outcome, 'Model': 'ANCOVA' if adjusted else 'ANOVA'}
             for g in [0, 1]:
                 v = np.zeros(x.shape[1]); v[0] = 1; v[1] = g
+                # Centering yields adjusted means at pooled covariate means.
                 row[f'G{g+1}_M'] = v @ b
                 row[f'G{g+1}_SE'] = np.sqrt(v @ cov @ v)
             row.update({'df1': x.shape[1] - 1, 'df2': df, 'F': f, 'p': p, 'eta_squared': eta2})
             results.append(row)
             if adjusted:
-                for j, name in enumerate(['Curiosity', 'Trust'], 2):
+                for j, name in enumerate(
+                    ['Group_G2_minus_G1', 'Curiosity', 'Trust'], 1
+                ):
                     f_term = b[j] ** 2 / cov[j, j]
-                    covariate_results.append({'Construct': outcome, 'Covariate': name,
-                        'df1': 1, 'df2': df, 'F': f_term, 'p': stats.f.sf(f_term, 1, df),
-                        'partial_eta_squared': f_term / (f_term + df)})
-    pd.DataFrame(results).to_csv(OUTPUT / 'table10_anova_ancova.csv', index=False)
-    pd.DataFrame(covariate_results).to_csv(OUTPUT / 'section9_3_2_covariate_effects.csv', index=False)
 
+                    term_results.append({
+                        'Construct': outcome,
+                        'Term': name,
+                        'coefficient': b[j],
+                        'SE': np.sqrt(cov[j, j]),
+                        'df1': 1,
+                        'df2': df,
+                        'F': f_term,
+                        'p': stats.f.sf(f_term, 1, df),
+                        'partial_eta_squared': f_term / (f_term + df)
+                    })
+    pd.DataFrame(results).to_csv(OUTPUT / 'table10_anova_ancova.csv', index=False)
+    pd.DataFrame(term_results).to_csv(OUTPUT / 'section9_3_2_term_tests.csv', index=False)
+    # Section 9.4: direction is visible in the group means; no extra test is needed.
+    # Use actual sample-derived dfs; the paper's stated n and some dfs conflict.
     print(f'Saved five result tables to {OUTPUT.resolve()}')
 
 

@@ -1,12 +1,14 @@
-Scale,Cronbach_alpha
-Completeness,0.8133954154727795
-Soundness,0.728818998716303
-Causability,0.721951219512195
-Clarity,0.8122192273135671
-Compactness,0.5198380566801619
-Comprehensibility,0.4029099048684943
-Curiosity,0.769446391030133
-Trust,0.9114460668864813
-Fidelity,0.8997832369942197
-Interpretability,0.7431557873172548
-Compactness_without_item_3,0.7320261437908497
+Scale,Method,Cronbach_alpha
+Completeness,three raw items,0.8133954154727792
+Soundness,three raw items,0.728818998716303
+Causability,three raw items,0.721951219512195
+Clarity,three raw items,0.8122192273135671
+Compactness,three raw items,0.5198380566801619
+Comprehensibility,three raw items,0.4029099048684945
+Curiosity,three raw items,0.7694463910301332
+Trust,three raw items,0.9114460668864813
+Fidelity,three dimension scores (paper-comparable),0.8953757225433526
+Fidelity_nine_raw_items,nine raw items (sensitivity),0.8997832369942197
+Interpretability,three dimension scores (paper-comparable),0.6115094515318
+Interpretability_nine_raw_items,nine raw items (sensitivity),0.7431557873172548
+Compactness_without_item_3,,0.7320261437908497
